@@ -226,8 +226,6 @@ class S3ContentsManager(ContentsManager):
         k = self.bucket.get_key(key)
         return k is not None and not k.name.endswith(self.s3_key_delimiter)
 
-    exists = file_exists
-
     def new_untitled(self, path='', type='', ext=''):
         self.log.debug('new_untitled: %s', locals())
         model = {
@@ -297,6 +295,13 @@ class S3ContentsManager(ContentsManager):
         except Exception as e:
             raise web.HTTPError(400, u"Unexpected Error Writing Notebook: %s %s" % (path, e))
 
+    def _create_path(self, path):
+        self.log.debug('_create_path: %s', path)
+
+        k = boto.s3.key.Key(self.bucket)
+        k.key = self._path_to_s3_key_dir(path)
+        k.set_contents_from_string('')
+
     def rename(self, old_path, new_path):
         self.log.debug('rename: %s', locals())
         if new_path == old_path:
@@ -329,7 +334,7 @@ class S3ContentsManager(ContentsManager):
         elif model['type'] == 'file':
             self._save_file(path, model['content'], model.get('format'))
         elif model['type'] == 'directory':
-            pass  # keep symmetry with filemanager.save
+            self._create_path(path)
         else:
             raise web.HTTPError(400, "Unhandled contents type: %s" % model['type'])
 
