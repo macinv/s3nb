@@ -98,6 +98,7 @@ class S3ContentsManager(ContentsManager):
         config = self.config[self.__class__.__name__]  # this still can't be right
         self.s3_base_uri = config['s3_base_uri']
         self.s3_host = config['s3_host']
+        self.s3_ssk = config.get('s3_ssk', False)  # server-side encryption
         self.s3_key_delimiter = config.get('s3_key_delimiter', '/')
         self.s3_bucket, self.s3_prefix = self._parse_s3_uri(self.s3_base_uri, self.s3_key_delimiter)
         # ensure prefix ends with the delimiter
@@ -279,7 +280,7 @@ class S3ContentsManager(ContentsManager):
         with tempfile.NamedTemporaryFile() as f:
             f.write(content)
             f.seek(0)
-            k.set_contents_from_file(f)
+            k.set_contents_from_file(f, encrypt_key=self.s3_ssk)
 
     def _save_notebook(self, path, nb):
         self.log.debug('_save_notebook: %s', locals())
@@ -292,7 +293,7 @@ class S3ContentsManager(ContentsManager):
                 # write tempfile with utf-8 encoding
                 nbformat.write(nb, f, version=nbformat.NO_CONVERT)
                 # upload as bytes (t's fp didn't advance)
-                k.set_contents_from_file(t)
+                k.set_contents_from_file(t, encrypt_key=self.s3_ssk)
         except Exception as e:
             raise web.HTTPError(400, u"Unexpected Error Writing Notebook: %s %s" % (path, e))
 
