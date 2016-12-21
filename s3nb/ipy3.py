@@ -205,11 +205,14 @@ class S3ContentsManager(ContentsManager):
     def dir_exists(self, path):
         self.log.debug('dir_exists: %s', locals())
         key = self._path_to_s3_key(path)
+        self.log.debug('dir_exists: key: %s', key)
         if path == '':
             return True
         else:
+            # return self.bucket.get_key(key) is not None
             try:
                 next(iter(self.bucket.list(key, self.s3_key_delimiter)))
+                self.log.debug('dir_exists: True!')
                 return True
             except StopIteration:
                 return False
@@ -218,12 +221,14 @@ class S3ContentsManager(ContentsManager):
         self.log.debug('is_hidden %s', locals())
         return False
 
-    def file_exists(self, path):
+    def file_exists(self, path=''):
         self.log.debug('file_exists: %s', locals())
         if path == '':
             return False
         key = self._path_to_s3_key(path)
+        self.log.debug('file_exists: key: %s', key)
         k = self.bucket.get_key(key)
+        self.log.debug('file_exists: k: %s', k)
         return k is not None and not k.name.endswith(self.s3_key_delimiter)
 
     def new_untitled(self, path='', type='', ext=''):
@@ -255,7 +260,10 @@ class S3ContentsManager(ContentsManager):
         else:
             raise web.HTTPError(400, "Unexpected model type: %r" % model['type'])
 
-        name = self.increment_filename(untitled + ext, self.s3_prefix + path, insert=insert)
+        name = self.increment_filename(untitled + ext,
+                                       path,
+                                       # self.s3_prefix + path,
+                                       insert=insert)
         path = u'{0}/{1}'.format(path, name)
         model.update({
             'name': name,
