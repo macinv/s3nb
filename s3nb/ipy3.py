@@ -151,6 +151,9 @@ class S3ContentsManager(ContentsManager):
         self.log.debug('removing notebook in bucket: %s : %s', self.bucket.name, key)
         self.bucket.delete_key(key)
 
+    def delete_file(self, path):
+        self.delete(path)
+
     def get(self, path, content=True, type=None, format=None):
         self.log.debug('get: %s', locals())
         # get: {'content': 1, 'path': '', 'self': <ipy3.S3ContentsManager object at 0x10a650e90>, 'type': u'directory', 'format': None}
@@ -323,6 +326,9 @@ class S3ContentsManager(ContentsManager):
         self.bucket.copy_key(dst_key, self.bucket.name, src_key)
         self.log.debug('removing notebook in bucket: %s : %s', self.bucket.name, src_key)
         self.bucket.delete_key(src_key)
+
+    def rename_file(self, old_path, new_path):
+        self.rename(old_path, new_path)
 
     def save(self, model, path):
         """ very similar to filemanager.save """
