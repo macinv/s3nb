@@ -45,9 +45,13 @@ class S3ContentsManager(ContentsManager):
 
     def _s3_key_dir_to_model(self, key):
         self.log.debug("_s3_key_dir_to_model: %s: %s", key, key.name)
+
+        path = key.name.replace(self.s3_prefix, '')
+        if path and path[-1] == self.s3_key_delimiter:
+            path = path[:-1]
         model = {
             'name': self._get_key_dir_name(key.name),
-            'path': key.name.replace(self.s3_prefix, ''),
+            'path': path,
             'last_modified': datetime.datetime.utcnow(), # key.last_modified,  will be used in an HTTP header
             'created': None, # key.last_modified,
             'type': 'directory',
@@ -149,7 +153,14 @@ class S3ContentsManager(ContentsManager):
         self.log.debug('delete: %s', locals())
         key = self._path_to_s3_key(path)
         self.log.debug('removing notebook in bucket: %s : %s', self.bucket.name, key)
-        self.bucket.delete_key(key)
+        if self.bucket.get_key(key) is None:
+            self.log.debug('{} is a directory'.format(key))
+            for mem in self.bucket.list(key + self.s3_key_delimiter):
+                self.log.debug('Delete {} from bucket {}...'.format(mem.name, self.bucket.name))
+                self.bucket.delete_key(mem.name)
+        else:
+            self.log.debug('Delete {} from bucket {}...'.format(key, self.bucket.name))
+            self.bucket.delete_key(key)
 
     def delete_file(self, path):
         self.delete(path)
@@ -191,6 +202,10 @@ class S3ContentsManager(ContentsManager):
         else: # assume that it is file
             key = self._path_to_s3_key(path)
             k = self.bucket.get_key(key)
+
+            if k is None:
+                self.log.debug('{} is a directory'.format(key))
+                return self.get(path, content=content, type='directory', format=format)
 
             model = self._s3_key_file_to_model(k, timeformat=S3_TIMEFORMAT_GET_KEY)
 
@@ -321,9 +336,25 @@ class S3ContentsManager(ContentsManager):
         src_key = self._path_to_s3_key(old_path)
         dst_key = self._path_to_s3_key(new_path)
         self.log.debug('copying notebook in bucket: %s from %s to %s', self.bucket.name, src_key, dst_key)
+        if not self.bucket.get_key(src_key):
+            self.log.debug('{} is a directory.'.format(src_key))
+            # probably a directory
+            # need to copy individual files and subdirectories one by one
+            if self.bucket.get_key(dst_key + self.s3_key_delimiter):
+                raise web.HTTPError(409, u'Directory with name already exists: %s' % dst_key)
+
+            for mem in self.bucket.list(src_key + self.s3_key_delimiter):
+                self.bucket.copy_key(mem.name.replace(src_key, dst_key),
+                                     self.bucket.name,
+                                     mem.name,
+                                     encrypt_key=self.s3_ssk)
+                self.log.debug('removing {} in bucket {}...'.format(mem.name, self.bucket.name))
+                self.bucket.delete_key(mem.name)
+            return
+
         if self.bucket.get_key(dst_key):
             raise web.HTTPError(409, u'Notebook with name already exists: %s' % dst_key)
-        self.bucket.copy_key(dst_key, self.bucket.name, src_key)
+        self.bucket.copy_key(dst_key, self.bucket.name, src_key, encrypt_key=self.s3_ssk)
         self.log.debug('removing notebook in bucket: %s : %s', self.bucket.name, src_key)
         self.bucket.delete_key(src_key)
 
