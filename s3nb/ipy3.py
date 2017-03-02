@@ -290,9 +290,7 @@ class S3ContentsManager(ContentsManager):
         return self.new(model, path)
 
     def _save_file(self, path, content, format):
-        if format != 'text':
-            raise web.HTTPError(400, u'Only text files are supported')
-
+        self.log.debug('format: %s', format)
         try:
             bcontent = content.encode('utf8')
         except Exception as e:
